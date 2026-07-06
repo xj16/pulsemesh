@@ -1,5 +1,5 @@
 # --- Build stage: compile an OTP release with rebar3 -----------------------
-FROM erlang:27 AS build
+FROM erlang:26 AS build
 WORKDIR /app
 
 # Cache deps first.

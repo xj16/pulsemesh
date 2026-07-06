@@ -123,7 +123,7 @@ jobs:
       - name: Set up Erlang/OTP + rebar3
         uses: erlef/setup-beam@v1
         with:
-          otp-version: "27"
+          otp-version: "26"
           rebar3-version: "3.24.0"
 
       - name: Cache rebar3
