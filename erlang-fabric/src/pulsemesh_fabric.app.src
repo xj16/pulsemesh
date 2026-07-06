@@ -1,0 +1,23 @@
+%%% OTP application resource file for the PulseMesh fabric node.
+{application, pulsemesh_fabric, [
+  {description, "PulseMesh persistent-connection fabric: presence tracking and event fan-out over RabbitMQ"},
+  {vsn, "0.1.0"},
+  {registered, [pulsemesh_fabric_sup, pulsemesh_presence_sup, pulsemesh_channel_registry]},
+  {mod, {pulsemesh_fabric_app, []}},
+  {applications, [
+    kernel,
+    stdlib,
+    sasl,
+    cowboy,
+    amqp_client,
+    jsx
+  ]},
+  {env, [
+    {http_port, 8090},
+    {amqp_uri, "amqp://guest:guest@localhost:5672"},
+    {amqp_exchange, <<"pulsemesh.events">>}
+  ]},
+  {modules, []},
+  {licenses, ["MIT"]},
+  {links, [{"GitHub", "https://github.com/xj16/pulsemesh"}]}
+]}.

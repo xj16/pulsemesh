@@ -1,0 +1,14 @@
+## Erlang VM arguments for the PulseMesh fabric node.
+
+## Node name and distribution cookie. Override in production.
+-sname pulsemesh_fabric
+-setcookie pulsemesh_dev_cookie
+
+## Enable kernel poll for efficient socket handling.
++K true
+
+## Reasonable process limit for a connection-fabric node.
++P 1048576
+
+## Heartbeat between distributed nodes.
+-kernel net_ticktime 30

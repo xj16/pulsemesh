@@ -1,0 +1,8 @@
+_build/
+.rebar3/
+rebar.lock
+*.beam
+erl_crash.dump
+*.log
+Dockerfile
+.dockerignore

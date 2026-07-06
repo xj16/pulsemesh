@@ -1,0 +1,17 @@
+{:http
+ {:port #long #or [#env PULSEMESH_HTTP_PORT 8080]
+  :host #or [#env PULSEMESH_HTTP_HOST "0.0.0.0"]}
+
+ :postgres
+ {:jdbc-url #or [#env PULSEMESH_PG_URL
+                 "jdbc:postgresql://localhost:5432/pulsemesh?user=pulsemesh&password=pulsemesh"]
+  :pool-size #long #or [#env PULSEMESH_PG_POOL 8]}
+
+ :redis
+ {:uri #or [#env PULSEMESH_REDIS_URI "redis://localhost:6379"]}
+
+ :rabbitmq
+ {:uri      #or [#env PULSEMESH_AMQP_URI "amqp://guest:guest@localhost:5672"]
+  :exchange #or [#env PULSEMESH_AMQP_EXCHANGE "pulsemesh.events"]}
+
+ :profile #profile {:dev :dev :test :test :default :prod}}

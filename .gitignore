@@ -1,0 +1,41 @@
+# --- Node ---
+node_modules/
+
+# --- Build output ---
+dist/
+build/
+target/
+bin/
+obj/
+
+# --- Python ---
+__pycache__/
+.venv/
+venv/
+*.pyc
+
+# --- Clojure ---
+.cpcache/
+.clj-kondo/.cache/
+.lsp/.cache/
+pom.xml.asc
+
+# --- Erlang / rebar3 ---
+_build/
+rebar.lock
+*.beam
+erl_crash.dump
+.rebar3/
+
+# --- Vagrant ---
+.vagrant/
+
+# --- Logs ---
+*.log
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
