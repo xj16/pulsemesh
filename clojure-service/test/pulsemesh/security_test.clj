@@ -27,11 +27,14 @@
         "a different client has its own bucket")))
 
 (deftest rate-limit-refills-over-time
-  (let [allow? (sec/make-limiter {:rps 1000 :burst 1})]
+  ;; Use a slow refill (10 rps => 1 token per 100ms) so the immediate second
+  ;; call is reliably empty regardless of scheduler jitter, then wait well past
+  ;; one refill interval and confirm a token came back.
+  (let [allow? (sec/make-limiter {:rps 10 :burst 1})]
     (is (true? (allow? "k")))
-    (is (false? (allow? "k")))
-    (Thread/sleep 15)                    ;; 1000 rps => refills within 15ms
-    (is (true? (allow? "k")) "bucket refilled")))
+    (is (false? (allow? "k")) "bucket drained immediately after the burst")
+    (Thread/sleep 200)                   ;; 10 rps => >= 1 token after 100ms
+    (is (true? (allow? "k")) "bucket refilled after waiting")))
 
 (deftest rate-limit-can-be-disabled
   (let [h (sec/wrap-rate-limit ok-handler {:enabled false :burst 0})]
