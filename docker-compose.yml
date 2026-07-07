@@ -72,12 +72,50 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      command-query:
+        condition: service_started
     environment:
       PULSEMESH_FABRIC_PORT: "8090"
       PULSEMESH_AMQP_URI: "amqp://guest:guest@rabbitmq:5672"
       PULSEMESH_AMQP_EXCHANGE: "pulsemesh.events"
+      PULSEMESH_AMQP_QUEUE: "pulsemesh.fabric"
+      # Log-replay endpoint used to rehydrate presence trackers on (re)start.
+      PULSEMESH_CQ_URL: "http://command-query:8080"
     ports:
       - "8090:8090"
+
+  # Demo seeder: only runs under the `demo` profile. It waits for the
+  # command/query service, populates a few channels with realistic presence +
+  # chat, then exits — so `docker compose --profile demo up` brings the stack
+  # up ALREADY populated and the dashboard at :8090 shows a live room at once.
+  #   docker compose --profile demo up --build
+  seed:
+    profiles: ["demo"]
+    image: curlimages/curl:8.11.0
+    depends_on:
+      command-query:
+        condition: service_started
+    environment:
+      PULSEMESH_CQ_URL: "http://command-query:8080"
+    volumes:
+      - ./scripts:/scripts:ro
+    entrypoint: ["sh", "/scripts/seed.sh"]
+    restart: "no"
+
+  # Prometheus for the `observability` profile. Scrapes the command/query
+  # service's /metrics endpoint (commands accepted/rejected/invalid, conflict
+  # retries, append latency).
+  #   docker compose --profile observability up
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.55.1
+    depends_on:
+      command-query:
+        condition: service_started
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
 
 volumes:
   pg-data:

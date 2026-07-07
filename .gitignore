@@ -7,6 +7,9 @@ build/
 target/
 bin/
 obj/
+# …but DO commit the self-contained static dashboard bundle (portfolio embed).
+!web/dist/
+!web/dist/index.html
 
 # --- Python ---
 __pycache__/

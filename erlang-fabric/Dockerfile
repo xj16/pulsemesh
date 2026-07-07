@@ -23,7 +23,9 @@ COPY --from=build /app/_build/prod/rel/pulsemesh_fabric ./
 ENV RELX_REPLACE_OS_VARS=true \
     PULSEMESH_FABRIC_PORT=8090 \
     PULSEMESH_AMQP_URI="amqp://guest:guest@rabbitmq:5672" \
-    PULSEMESH_AMQP_EXCHANGE="pulsemesh.events"
+    PULSEMESH_AMQP_EXCHANGE="pulsemesh.events" \
+    PULSEMESH_AMQP_QUEUE="pulsemesh.fabric" \
+    PULSEMESH_CQ_URL="http://command-query:8080"
 EXPOSE 8090
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=5 \

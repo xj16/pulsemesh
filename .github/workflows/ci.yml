@@ -73,8 +73,25 @@ jobs:
           key: deps-${{ hashFiles('clojure-service/deps.edn') }}
           restore-keys: deps-
 
-      - name: Run pure-domain unit tests
+      - name: Run pure-domain + property tests
         run: clojure -X:test
+
+      - name: Run integration tests (real Postgres + Redis)
+        env:
+          PULSEMESH_PG_URL: "jdbc:postgresql://localhost:5432/pulsemesh?user=pulsemesh&password=pulsemesh"
+          PULSEMESH_REDIS_URI: "redis://localhost:6379"
+        run: clojure -X:integration
+
+      - name: Coverage report (cloverage)
+        run: clojure -M:coverage || true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: clojure-service/target/coverage/codecov.json
+          flags: clojure
+          fail_ci_if_error: false
+        continue-on-error: true
 
       - name: Build uberjar
         run: clojure -T:build uber
@@ -145,6 +162,28 @@ jobs:
         run: rebar3 as prod release
 
   # ---------------------------------------------------------------------------
+  # Standalone static demo bundle: build the self-contained dashboard and
+  # publish it as a downloadable artifact. It runs in demo mode with no
+  # backend, so it is directly embeddable in a portfolio / on Pages.
+  # ---------------------------------------------------------------------------
+  web-demo:
+    name: Static demo bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build static bundle
+        run: bash scripts/build-web.sh
+      - name: Sanity-check the bundle
+        run: |
+          test -f web/dist/index.html
+          grep -q 'PulseMesh' web/dist/index.html
+      - name: Upload demo bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsemesh-dashboard
+          path: web/dist
+
+  # ---------------------------------------------------------------------------
   # Full-stack docker-compose smoke test: build both images and confirm both
   # services report healthy, wired to real Postgres/Redis/RabbitMQ.
   # ---------------------------------------------------------------------------
@@ -184,6 +223,20 @@ jobs:
           echo
           curl -sf http://localhost:8080/api/channels/smoke/presence
           echo
+
+      - name: Replay endpoint returns the stream
+        run: |
+          curl -sf "http://localhost:8080/api/channels/smoke/events?since=0" \
+            | grep -q '"member-joined"'
+
+      - name: Prometheus metrics are exposed
+        run: |
+          curl -sf http://localhost:8080/metrics \
+            | grep -q 'pulsemesh_commands_accepted_total'
+
+      - name: Fabric serves the live dashboard
+        run: |
+          curl -sf http://localhost:8090/ | grep -q 'PulseMesh'
 
       - name: Tear down
         if: always()

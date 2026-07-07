@@ -8,6 +8,8 @@
     kernel,
     stdlib,
     sasl,
+    inets,
+    ssl,
     cowboy,
     amqp_client,
     jsx
@@ -15,7 +17,9 @@
   {env, [
     {http_port, 8090},
     {amqp_uri, "amqp://guest:guest@localhost:5672"},
-    {amqp_exchange, <<"pulsemesh.events">>}
+    {amqp_exchange, <<"pulsemesh.events">>},
+    {amqp_queue, <<"pulsemesh.fabric">>},
+    {cq_url, "http://command-query:8080"}
   ]},
   {modules, []},
   {licenses, ["MIT"]},

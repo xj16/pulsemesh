@@ -1,13 +1,28 @@
 %%%-------------------------------------------------------------------
 %%% @doc RabbitMQ consumer + event fan-out engine.
 %%%
-%%% Connects to RabbitMQ, declares/binds an exclusive queue to the shared
-%%% `pulsemesh.events` topic exchange with routing key `channel.#`, and for
-%%% every delivered event:
+%%% Connects to RabbitMQ, declares/binds a *named, durable* queue to the
+%%% shared `pulsemesh.events` topic exchange with routing key `channel.#`,
+%%% and for every delivered event:
 %%%
 %%%   1. decodes the JSON body into a map
 %%%   2. feeds it to the channel's presence tracker (starting one if needed)
 %%%   3. broadcasts it to every WebSocket subscribed to that channel
+%%%
+%%% Delivery guarantee (this is the part that makes the README honest):
+%%%
+%%%   * The queue is durable and NOT auto-delete/exclusive, so events
+%%%     published while the fabric is down are RETAINED by the broker and
+%%%     delivered when the fabric reconnects — genuine at-least-once fan-out
+%%%     rather than best-effort.
+%%%   * We use manual acks (no `no_ack`): an event is only removed from the
+%%%     queue after it has been applied + fanned out, so a crash between
+%%%     delivery and processing re-delivers rather than drops.
+%%%   * Presence is a projection, so a tracker that restarts empty rehydrates
+%%%     from the durable Postgres log via the command/query service's
+%%%     `GET /api/channels/:id/events?since=` replay endpoint (see
+%%%     `pulsemesh_replay`), closing the gap for events that were acked
+%%%     before the tracker existed.
 %%%
 %%% As a supervised gen_server, a dropped broker connection crashes this
 %%% process and the supervisor restarts it, which re-establishes the
@@ -123,16 +138,29 @@ setup_topology(Ch, Exchange) ->
         amqp_channel:call(Ch, #'exchange.declare'{exchange = Exchange,
                                                   type = <<"topic">>,
                                                   durable = true}),
-    %% Exclusive, auto-deleting queue: this node's private fan-out feed.
+    %% Named, durable, NON-exclusive queue: the fabric's persistent fan-out
+    %% feed. Because it survives fabric restarts and broker restarts, events
+    %% published while the fabric is offline are retained and delivered on
+    %% reconnect — this is the "at-least-once fan-out" the docs promise.
+    Queue = application:get_env(pulsemesh_fabric, amqp_queue,
+                                <<"pulsemesh.fabric">>),
     #'queue.declare_ok'{queue = Q} =
-        amqp_channel:call(Ch, #'queue.declare'{exclusive = true,
-                                               auto_delete = true}),
+        amqp_channel:call(Ch, #'queue.declare'{queue = Queue,
+                                               durable = true,
+                                               exclusive = false,
+                                               auto_delete = false}),
     #'queue.bind_ok'{} =
         amqp_channel:call(Ch, #'queue.bind'{queue = Q,
                                             exchange = Exchange,
                                             routing_key = <<"channel.#">>}),
+    %% Bounded prefetch so an unacked backlog can't blow up memory, and
+    %% manual acks (no_ack = false) so an event is only dropped from the queue
+    %% after we have applied + fanned it out.
+    #'basic.qos_ok'{} =
+        amqp_channel:call(Ch, #'basic.qos'{prefetch_count = 256}),
     #'basic.consume_ok'{} =
-        amqp_channel:subscribe(Ch, #'basic.consume'{queue = Q}, self()),
+        amqp_channel:subscribe(Ch, #'basic.consume'{queue = Q, no_ack = false},
+                               self()),
     ok.
 
 handle_delivery(Body) ->

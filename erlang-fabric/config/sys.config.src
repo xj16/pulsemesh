@@ -5,7 +5,9 @@
   {pulsemesh_fabric, [
     {http_port, ${PULSEMESH_FABRIC_PORT}},
     {amqp_uri, "${PULSEMESH_AMQP_URI}"},
-    {amqp_exchange, <<"${PULSEMESH_AMQP_EXCHANGE}">>}
+    {amqp_exchange, <<"${PULSEMESH_AMQP_EXCHANGE}">>},
+    {amqp_queue, <<"${PULSEMESH_AMQP_QUEUE}">>},
+    {cq_url, "${PULSEMESH_CQ_URL}"}
   ]},
 
   {kernel, [

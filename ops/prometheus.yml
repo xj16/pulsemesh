@@ -1,0 +1,17 @@
+# Prometheus scrape config for the PulseMesh local stack.
+# Brought up by the `observability` compose profile:
+#   docker compose --profile observability up
+# Then open Prometheus at http://localhost:9090 and query e.g.
+#   rate(pulsemesh_commands_accepted_total[1m])
+#   pulsemesh_command_latency_seconds_sum / pulsemesh_command_latency_seconds_count
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: pulsemesh-command-query
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["command-query:8080"]
+        labels:
+          service: command-query

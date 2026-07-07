@@ -15,6 +15,7 @@
             [pulsemesh.infra.db :as db]
             [pulsemesh.infra.redis :as redis]
             [pulsemesh.infra.rabbit :as rabbit]
+            [pulsemesh.infra.metrics :as metrics]
             [clojure.tools.logging :as log])
   (:import [java.time Instant]))
 
@@ -47,32 +48,38 @@
      {:status :invalid  :problems [...]}
      {:status :conflict}"
   [{:keys [redis-conn publisher] :as sys} raw-command]
-  (let [{:keys [ok error]} (schema/validate-command raw-command)]
-    (if error
-      {:status :invalid :problems error}
-      (let [command (stamp-time ok)]
-        (loop [tries 0]
-          (let [result (try
-                         (attempt sys command)
-                         (catch clojure.lang.ExceptionInfo e
-                           (if (= ::db/version-conflict (:type (ex-data e)))
-                             ::retry
-                             (throw e))))]
-            (cond
-              (= result ::retry)
-              (if (< tries max-retries)
-                (recur (inc tries))
-                (do (log/warn "giving up after" max-retries "conflicts on"
-                              (:channel-id command))
-                    {:status :conflict}))
+  (metrics/timed "pulsemesh_command_latency_seconds"
+    (let [{:keys [ok error]} (schema/validate-command raw-command)]
+      (if error
+        (do (metrics/inc-counter! "pulsemesh_commands_invalid_total")
+            {:status :invalid :problems error})
+        (let [command (stamp-time ok)]
+          (loop [tries 0]
+            (let [result (try
+                           (attempt sys command)
+                           (catch clojure.lang.ExceptionInfo e
+                             (if (= ::db/version-conflict (:type (ex-data e)))
+                               ::retry
+                               (throw e))))]
+              (cond
+                (= result ::retry)
+                (do (metrics/inc-counter! "pulsemesh_command_retries_total")
+                    (if (< tries max-retries)
+                      (recur (inc tries))
+                      (do (log/warn "giving up after" max-retries "conflicts on"
+                                    (:channel-id command))
+                          (metrics/inc-counter! "pulsemesh_commands_conflict_total")
+                          {:status :conflict})))
 
-              (:rejected result)
-              {:status :rejected :reason (:rejected result)}
+                (:rejected result)
+                (do (metrics/inc-counter! "pulsemesh_commands_rejected_total")
+                    {:status :rejected :reason (:rejected result)})
 
-              :else
-              (let [events (:accepted result)]
-                ;; Fan out to read models + broker. Best-effort; already durable.
-                (doseq [e events]
-                  (redis/project-event! redis-conn e))
-                (rabbit/publish-all! publisher events)
-                {:status :accepted :events events}))))))))
+                :else
+                (let [events (:accepted result)]
+                  ;; Fan out to read models + broker. Best-effort; already durable.
+                  (doseq [e events]
+                    (redis/project-event! redis-conn e))
+                  (rabbit/publish-all! publisher events)
+                  (metrics/inc-counter! "pulsemesh_commands_accepted_total")
+                  {:status :accepted :events events})))))))))

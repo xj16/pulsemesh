@@ -40,3 +40,20 @@
   [{:keys [ds]} channel-id]
   {:channel-id channel-id
    :events (db/load-stream ds channel-id)})
+
+(defn channel-events-since
+  "Return the ordered events for a channel with version strictly greater than
+   `since` (0 => the whole stream). This is the replay endpoint the fabric
+   uses on (re)connect to close any gap: a consumer that was offline, or a
+   presence tracker that crashed and restarted with empty state, calls this to
+   rehydrate straight from the durable log instead of waiting for future
+   events. It is what makes the 'consumers catch up / replay' failure-model
+   claim actually true."
+  [{:keys [ds]} channel-id since]
+  (let [since  (max 0 (or since 0))
+        events (->> (db/load-stream ds channel-id)
+                    (filterv #(> (:version %) since)))]
+    {:channel-id channel-id
+     :since      since
+     :count      (count events)
+     :events     events}))

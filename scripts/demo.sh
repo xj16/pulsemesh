@@ -27,6 +27,7 @@ cmd() {
 
 say "Health check"
 curl -sf "$CQ/health"; echo
+echo "(tip: open the live dashboard at http://localhost:8090/ to watch this happen)"
 
 # Optionally tail the fabric over WebSocket in the background.
 if command -v websocat >/dev/null 2>&1; then

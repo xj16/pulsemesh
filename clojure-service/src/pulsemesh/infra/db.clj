@@ -169,7 +169,11 @@
           (throw e))))))
 
 ;; ---------------------------------------------------------------------------
-;; Schema bootstrap (used by migrations/tests when Migratus is not driving).
+;; Schema bootstrap FALLBACK. Migratus (pulsemesh.infra.migrate) is the
+;; authoritative schema driver and runs at boot; this ad-hoc DDL exists only
+;; as a dependency-free fallback (used if Migratus is unavailable) and is kept
+;; byte-for-byte equivalent to the initial migration in
+;; resources/db/migrations/.
 ;; ---------------------------------------------------------------------------
 
 (def schema-ddl

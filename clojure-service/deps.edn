@@ -34,12 +34,39 @@
   :dev
   {:extra-paths ["dev"]}
 
+  ;; Fast, infra-free tests: the pure aggregate + property-based invariants.
+  ;; Integration tests are tagged ^:integration and excluded here so this run
+  ;; needs no database; CI runs them separately via the :integration alias.
   :test
   {:extra-paths ["test"]
    :extra-deps  {io.github.cognitect-labs/test-runner
-                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                 org.clojure/test.check {:mvn/version "1.1.1"}}
    :main-opts   ["-m" "cognitect.test-runner"]
-   :exec-fn     cognitect.test-runner.api/test}
+   :exec-fn     cognitect.test-runner.api/test
+   :exec-args   {:excludes [:integration]}}
+
+  ;; Integration tests that hit real Postgres/Redis (tagged ^:integration).
+  ;; CI provides the service containers. Run with: clojure -X:integration
+  :integration
+  {:extra-paths ["test"]
+   :extra-deps  {io.github.cognitect-labs/test-runner
+                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                 org.clojure/test.check {:mvn/version "1.1.1"}}
+   :exec-fn     cognitect.test-runner.api/test
+   :exec-args   {:includes [:integration]}}
+
+  ;; Line/branch coverage via cloverage (fast tests only, no DB).
+  :coverage
+  {:extra-paths ["test"]
+   :extra-deps  {cloverage/cloverage       {:mvn/version "1.2.4"}
+                 org.clojure/test.check    {:mvn/version "1.1.1"}
+                 io.github.cognitect-labs/test-runner
+                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+   :main-opts   ["-m" "cloverage.coverage"
+                 "-p" "src" "-s" "test"
+                 "--ns-exclude-regex" ".*integration.*"
+                 "--codecov" "--text"]}
 
   :build
   {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.5"}}

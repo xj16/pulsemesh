@@ -14,4 +14,18 @@
  {:uri      #or [#env PULSEMESH_AMQP_URI "amqp://guest:guest@localhost:5672"]
   :exchange #or [#env PULSEMESH_AMQP_EXCHANGE "pulsemesh.events"]}
 
+ ;; Security is off/lenient by default so the demo stays frictionless; every
+ ;; knob is env-overridable to reach a production posture (see docs/SECURITY.md).
+ :security
+ {:rate-limit {:enabled #boolean #or [#env PULSEMESH_RATE_LIMIT_ENABLED true]
+               :rps     #long    #or [#env PULSEMESH_RATE_LIMIT_RPS 50]
+               :burst   #long    #or [#env PULSEMESH_RATE_LIMIT_BURST 100]}
+  :body-limit {:max-bytes #long #or [#env PULSEMESH_MAX_BODY_BYTES 65536]}
+  ;; Auth: leave the secret blank to keep writes open (demo). Set
+  ;; PULSEMESH_AUTH_SECRET to require `Authorization: Bearer <secret>`.
+  :auth       {:shared-secret #or [#env PULSEMESH_AUTH_SECRET ""]}
+  ;; CORS: default allows the local stack's dashboard origins. Set to "*" to
+  ;; echo any origin (dev only), or a comma-free single origin.
+  :cors       {:allowed #or [#env PULSEMESH_CORS_ORIGIN :default]}}
+
  :profile #profile {:dev :dev :test :test :default :prod}}

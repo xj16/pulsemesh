@@ -6,6 +6,7 @@
   (:require [ring.adapter.jetty :as jetty]
             [pulsemesh.infra.config :as config]
             [pulsemesh.infra.db :as db]
+            [pulsemesh.infra.migrate :as migrate]
             [pulsemesh.infra.redis :as redis]
             [pulsemesh.infra.rabbit :as rabbit]
             [pulsemesh.api :as api]
@@ -28,7 +29,7 @@
   [profile]
   (let [cfg        (config/load-config profile)
         ds         (db/open-datasource (:postgres cfg))
-        _          (db/ensure-schema! ds)
+        _          (migrate/migrate! ds)
         redis-conn (redis/make-conn (:redis cfg))
         publisher  (try-connect "RabbitMQ"
                                 #(rabbit/connect (:rabbitmq cfg)))

@@ -73,9 +73,28 @@ The fabric owns live client connections and event fan-out. Its supervision tree
 | `pulsemesh_amqp_consumer` | Subscribes to RabbitMQ (`channel.#`), updates presence trackers, and broadcasts each event to WebSocket subscribers. |
 
 **Supervised processes survive crashes.** A wedged presence tracker is restarted
-with fresh state (presence is a projection, so it's rebuildable). A dropped
-broker connection crashes the consumer, and the supervisor restarts it — that
-*is* the reconnection logic, done the OTP way ("let it crash").
+and immediately **rehydrates from the durable log** (it replays
+`GET /api/channels/:id/events` from the command/query service), so it comes
+back with correct presence instead of waiting for the next live event. A
+dropped broker connection crashes the consumer, and the supervisor restarts it
+— that *is* the reconnection logic, done the OTP way ("let it crash").
+
+### At-least-once fan-out
+
+The consumer binds a **named, durable, non-exclusive** queue
+(`pulsemesh.fabric`) to the exchange with `channel.#`, and consumes with
+**manual acks** and bounded prefetch. Concretely:
+
+- Events published while the fabric is **down** are retained by the broker and
+  delivered on reconnect (the queue is not auto-deleted with the connection).
+- An event is only removed from the queue **after** it has been applied to
+  presence and fanned out to sockets; a crash mid-processing re-delivers it.
+- Events are versioned per stream, so a re-delivery or a replay that overlaps
+  live traffic is applied **idempotently** (the tracker ignores versions it has
+  already seen).
+
+Together these make the "at-least-once fan-out / consumers catch up" claim
+literally true rather than aspirational.
 
 Clients connect over WebSocket at `/ws?channel=<id>&user=<id>` (Cowboy). On
 connect they get a presence snapshot; thereafter every committed event for the
@@ -96,6 +115,6 @@ RabbitMQ is the seam between them, so each side scales and fails independently.
 | Component down | Effect |
 |---|---|
 | Redis | Reads fall back to Postgres replay. No data loss. |
-| RabbitMQ | Writes still commit durably; fan-out pauses. Consumers catch up / replay. |
-| A fabric process | Supervisor restarts it; presence rehydrates from subsequent events. |
+| RabbitMQ | Writes still commit durably; fan-out pauses. The durable `pulsemesh.fabric` queue retains events and delivers them on reconnect (at-least-once). |
+| A fabric process | Supervisor restarts it; the presence tracker rehydrates from the durable log via the replay endpoint, then resumes live events. |
 | Postgres | Writes rejected (it is the source of truth). Reads still serve cached data. |

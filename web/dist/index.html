@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PulseMesh — live presence &amp; event tape</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131824; --panel-2:#0f1420; --line:#222b3d;
+    --ink:#e6edf6; --muted:#8394ad; --dim:#5b6b85;
+    --accent:#4f8cff; --accent-2:#7c5cff;
+    --online:#37d67a; --away:#f6c343; --busy:#ff5c7a; --offline:#5b6b85;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(124,92,255,.16), transparent 60%),
+      radial-gradient(1000px 500px at -10% 10%, rgba(79,140,255,.14), transparent 55%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;
+  }
+  a{color:var(--accent);text-decoration:none}
+  header{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:16px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(19,24,36,.9), rgba(19,24,36,.55));
+    backdrop-filter:blur(6px);position:sticky;top:0;z-index:5;
+  }
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+  .logo .dot{
+    width:12px;height:12px;border-radius:50%;background:var(--online);
+    box-shadow:0 0 0 0 rgba(55,214,122,.6);animation:pulse 2s infinite;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(55,214,122,.55)}
+    70%{box-shadow:0 0 0 10px rgba(55,214,122,0)}
+    100%{box-shadow:0 0 0 0 rgba(55,214,122,0)}
+  }
+  .logo b{font-size:16px}
+  .tagline{color:var(--muted);font-size:12.5px}
+  .spacer{flex:1}
+  .conn{
+    display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+    padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);
+  }
+  .conn .led{width:9px;height:9px;border-radius:50%;background:var(--offline);transition:background .25s}
+  .conn.live .led{background:var(--online);box-shadow:0 0 8px var(--online)}
+  .conn.demo .led{background:var(--accent-2);box-shadow:0 0 8px var(--accent-2)}
+  .conn.connecting .led{background:var(--away)}
+
+  main{
+    display:grid;gap:14px;padding:14px 18px 22px;max-width:1240px;margin:0 auto;
+    grid-template-columns:280px 1fr 380px;
+    grid-template-rows:auto;
+    align-items:start;
+  }
+  @media (max-width:1080px){
+    main{grid-template-columns:1fr 1fr}
+    #tape-card{grid-column:1/-1}
+  }
+  @media (max-width:720px){ main{grid-template-columns:1fr} }
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:0 12px 34px rgba(0,0,0,.28);
+  }
+  .card h2{
+    margin:0;padding:12px 15px;font-size:12px;text-transform:uppercase;
+    letter-spacing:.14em;color:var(--muted);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;
+  }
+  .card h2 .count{
+    margin-left:auto;font-family:var(--mono);color:var(--dim);
+    font-size:11px;letter-spacing:0;text-transform:none;
+  }
+  .card .body{padding:12px 14px}
+
+  /* Roster */
+  #roster ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .member{
+    display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:10px;
+    background:var(--panel-2);border:1px solid transparent;transition:border-color .2s, transform .12s;
+  }
+  .member.flash{animation:flash .9s ease-out}
+  @keyframes flash{from{background:rgba(79,140,255,.22)}to{background:var(--panel-2)}}
+  .avatar{
+    width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-weight:700;color:#0b0e14;font-size:13px;position:relative;
+  }
+  .avatar .ring{
+    position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;
+    border:2px solid var(--panel-2);
+  }
+  .member .name{font-weight:600}
+  .member .state{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--muted)}
+  .s-online{background:var(--online)} .s-away{background:var(--away)}
+  .s-busy{background:var(--busy)} .s-offline{background:var(--offline)}
+  .empty{color:var(--dim);font-size:13px;padding:8px 4px}
+
+  /* Messages */
+  #messages .body{display:flex;flex-direction:column;height:420px}
+  .msg-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding-right:4px}
+  .msg{display:flex;gap:10px;align-items:flex-start}
+  .msg .avatar{width:28px;height:28px;font-size:11px}
+  .msg .bubble{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:7px 11px;max-width:100%}
+  .msg .who{font-weight:600;font-size:12.5px}
+  .msg .who .t{color:var(--dim);font-weight:400;font-family:var(--mono);font-size:10.5px;margin-left:6px}
+  .msg .text{margin-top:1px;word-break:break-word}
+  .sys{color:var(--dim);font-size:12px;text-align:center;font-style:italic;padding:2px}
+
+  .composer{display:flex;gap:8px;margin-top:11px;border-top:1px solid var(--line);padding-top:11px}
+  .composer input[type=text]{
+    flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:9px 12px;font-size:13px;outline:none;
+  }
+  .composer input[type=text]:focus{border-color:var(--accent)}
+  button{
+    background:linear-gradient(180deg,var(--accent),#3a72e0);color:#fff;border:0;
+    border-radius:9px;padding:9px 14px;font-weight:600;cursor:pointer;font-size:13px;
+    transition:filter .15s, transform .08s;
+  }
+  button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
+  button.ghost{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);font-weight:500}
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  /* Event tape */
+  #tape-card .body{padding:0}
+  .tape{height:452px;overflow-y:auto;font-family:var(--mono);font-size:11.5px}
+  .ev{padding:8px 13px;border-bottom:1px solid rgba(34,43,61,.6);display:flex;gap:9px;align-items:baseline;animation:slidein .25s ease-out}
+  @keyframes slidein{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+  .ev .v{color:var(--dim);flex:none;width:34px;text-align:right}
+  .ev .tag{
+    flex:none;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+  .t-channel-created{background:rgba(124,92,255,.18);color:#b9a8ff}
+  .t-member-joined{background:rgba(55,214,122,.16);color:#7ee6a8}
+  .t-member-left{background:rgba(91,107,133,.22);color:#9fb0c9}
+  .t-message-posted{background:rgba(79,140,255,.18);color:#9dc0ff}
+  .t-presence-changed{background:rgba(246,195,67,.16);color:#f3d283}
+  .t-welcome{background:rgba(124,92,255,.12);color:#b9a8ff}
+  .ev .payload{color:var(--muted);word-break:break-all}
+  .ev .payload b{color:var(--ink);font-weight:600}
+
+  /* Controls */
+  #controls .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  #controls label{font-size:11px;color:var(--muted);width:100%;text-transform:uppercase;letter-spacing:.08em}
+  #controls input[type=text]{
+    flex:1;min-width:90px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:7px 10px;font-size:13px;outline:none;font-family:var(--mono);
+  }
+  #controls select{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:7px 10px;font-size:13px;
+  }
+  .presence-btns{display:flex;gap:6px;flex-wrap:wrap}
+  .presence-btns button{padding:6px 10px;font-size:12px}
+  .hint{color:var(--dim);font-size:11.5px;margin-top:2px}
+  .banner{
+    padding:9px 14px;font-size:12.5px;text-align:center;color:#d8c6ff;
+    background:linear-gradient(90deg, rgba(124,92,255,.12), rgba(79,140,255,.10));
+    border-bottom:1px solid var(--line);
+  }
+  .banner code{background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:11.5px}
+  footer{color:var(--dim);text-align:center;padding:14px;font-size:12px}
+  kbd{font-family:var(--mono);background:var(--panel-2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:11px}
+</style>
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+<header>
+  <div class="logo"><span class="dot"></span><b>PulseMesh</b></div>
+  <span class="tagline">event-sourced presence &amp; chat &mdash; live over WebSocket</span>
+  <span class="spacer"></span>
+  <div id="conn" class="conn connecting">
+    <span class="led"></span><span id="conn-text">connecting…</span>
+  </div>
+</header>
+
+<main>
+  <!-- Left: presence roster -->
+  <section class="card" id="roster">
+    <h2>Presence <span class="count" id="roster-count">0</span></h2>
+    <div class="body">
+      <ul id="roster-list"></ul>
+      <div class="empty" id="roster-empty">No one here yet — join below.</div>
+    </div>
+  </section>
+
+  <!-- Center: messages + composer -->
+  <section class="card" id="messages">
+    <h2>#<span id="chan-name">lobby</span> <span class="count" id="msg-count">0 messages</span></h2>
+    <div class="body">
+      <div class="msg-list" id="msg-list"></div>
+      <div class="composer">
+        <input id="msg-input" type="text" placeholder="Message #lobby as your user…" autocomplete="off" />
+        <button id="msg-send">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: raw event tape -->
+  <section class="card" id="tape-card">
+    <h2>Event tape <span class="count" id="tape-count">0 events</span></h2>
+    <div class="body"><div class="tape" id="tape"></div></div>
+  </section>
+
+  <!-- Controls span full width under the three panels -->
+  <section class="card" id="controls" style="grid-column:1/-1">
+    <h2>Drive it</h2>
+    <div class="body">
+      <div class="row">
+        <label>Identity &amp; channel</label>
+        <input id="user-input" type="text" value="alice" placeholder="user-id" />
+        <input id="channel-input" type="text" value="lobby" placeholder="channel-id" />
+        <button id="join-btn">Join</button>
+        <button id="leave-btn" class="ghost">Leave</button>
+      </div>
+      <div class="row">
+        <label>Set presence</label>
+        <div class="presence-btns">
+          <button class="ghost" data-p="online">🟢 online</button>
+          <button class="ghost" data-p="away">🟡 away</button>
+          <button class="ghost" data-p="busy">🔴 busy</button>
+          <button class="ghost" data-p="offline">⚪ offline</button>
+        </div>
+      </div>
+      <p class="hint">
+        Commands POST to <code id="cq-url">/api/commands</code>; the socket streams the
+        resulting events straight back into the tape. Press <kbd>Enter</kbd> in the
+        message box to send.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  PulseMesh · Clojure command/query brain + Erlang/OTP fabric over RabbitMQ ·
+  <a href="https://github.com/xj16/pulsemesh" target="_blank" rel="noopener">source on GitHub</a>
+</footer>
+
+<script>
+/* =========================================================================
+   PulseMesh dashboard — a single dependency-free page with two modes:
+
+     LIVE : talks to the real fabric (this page's own host over WS) and the
+            Clojure command/query service for POSTing commands.
+
+     DEMO : when there is no backend (e.g. embedded as a static portfolio
+            bundle) or when the socket cannot be reached, an in-browser
+            simulator fabricates the exact same event stream a real backend
+            would emit, so the page is fully alive with zero infrastructure.
+
+   Force demo with ?demo=1. Point at a remote backend with ?cq=<url>&ws=<url>.
+   ========================================================================= */
+(() => {
+  "use strict";
+  const qs = new URLSearchParams(location.search);
+  const CHANNEL = qs.get("channel") || "lobby";
+  const FORCE_DEMO = qs.get("demo") === "1";
+
+  // Resolve backend URLs. Defaults assume the fabric serves this page and the
+  // command/query service is reachable at :8080 on the same host.
+  const host = location.hostname || "localhost";
+  const CQ_URL = qs.get("cq") ||
+    (location.protocol.startsWith("http") && location.hostname
+      ? `${location.protocol}//${host}:8080`
+      : "http://localhost:8080");
+  const WS_URL = qs.get("ws") ||
+    (location.protocol.startsWith("http") && location.hostname
+      ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`
+      : "ws://localhost:8090/ws");
+
+  // ---- DOM refs ----------------------------------------------------------
+  const el = (id) => document.getElementById(id);
+  const rosterList = el("roster-list"), rosterEmpty = el("roster-empty"),
+        rosterCount = el("roster-count"),
+        msgList = el("msg-list"), msgCount = el("msg-count"),
+        tape = el("tape"), tapeCount = el("tape-count"),
+        conn = el("conn"), connText = el("conn-text"),
+        banner = el("banner"), chanName = el("chan-name"),
+        userInput = el("user-input"), channelInput = el("channel-input"),
+        msgInput = el("msg-input"), cqUrlEl = el("cq-url");
+
+  channelInput.value = CHANNEL; chanName.textContent = CHANNEL;
+  msgInput.placeholder = `Message #${CHANNEL} as your user…`;
+  cqUrlEl.textContent = `${CQ_URL}/api/commands`;
+
+  const STATE_ORDER = { online: 0, busy: 1, away: 2, offline: 3 };
+  const AVATAR_COLORS = ["#4f8cff","#7c5cff","#37d67a","#f6c343","#ff5c7a","#22c3d6","#ff9e57","#b06cff"];
+  const colorFor = (id) => {
+    let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  };
+  const initials = (id) => id.slice(0, 2).toUpperCase();
+  const shortTime = (iso) => {
+    const d = iso ? new Date(iso) : new Date();
+    return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  };
+
+  // ---- local view state --------------------------------------------------
+  const presence = new Map();  // user-id -> state
+  let msgN = 0, evN = 0;
+
+  function renderRoster(flashUser) {
+    const entries = [...presence.entries()].sort(
+      (a, b) => (STATE_ORDER[a[1]] - STATE_ORDER[b[1]]) || a[0].localeCompare(b[0]));
+    rosterEmpty.hidden = entries.length > 0;
+    rosterCount.textContent = entries.length;
+    rosterList.innerHTML = "";
+    for (const [uid, st] of entries) {
+      const li = document.createElement("li");
+      li.className = "member" + (uid === flashUser ? " flash" : "");
+      li.innerHTML =
+        `<span class="avatar" style="background:${colorFor(uid)}">${initials(uid)}` +
+        `<span class="ring s-${st}"></span></span>` +
+        `<span class="name">${escapeHtml(uid)}</span>` +
+        `<span class="state">${st}</span>`;
+      rosterList.appendChild(li);
+    }
+  }
+
+  function addMessage(uid, body, iso) {
+    const row = document.createElement("div");
+    row.className = "msg";
+    row.innerHTML =
+      `<span class="avatar" style="background:${colorFor(uid)}">${initials(uid)}</span>` +
+      `<div class="bubble"><div class="who">${escapeHtml(uid)}` +
+      `<span class="t">${shortTime(iso)}</span></div>` +
+      `<div class="text">${escapeHtml(body)}</div></div>`;
+    msgList.appendChild(row);
+    msgList.scrollTop = msgList.scrollHeight;
+    msgN++; msgCount.textContent = `${msgN} message${msgN === 1 ? "" : "s"}`;
+  }
+
+  function addSystem(text) {
+    const row = document.createElement("div");
+    row.className = "sys"; row.textContent = text;
+    msgList.appendChild(row);
+    msgList.scrollTop = msgList.scrollHeight;
+  }
+
+  function addTape(ev) {
+    const type = ev.type || ev.op || "event";
+    const row = document.createElement("div");
+    row.className = "ev";
+    const v = ev.version != null ? "#" + ev.version : "";
+    let payload = "";
+    if (ev.user_id || ev["user-id"]) payload += `<b>${escapeHtml(ev.user_id || ev["user-id"])}</b> `;
+    if (ev.presence) payload += `→ ${escapeHtml(ev.presence)} `;
+    if (ev.body) payload += `“${escapeHtml(ev.body)}” `;
+    if (type === "welcome") payload = `snapshot: ${escapeHtml(JSON.stringify(ev.presence || {}))}`;
+    row.innerHTML =
+      `<span class="v">${v}</span>` +
+      `<span class="tag t-${type}">${type.replace(/-/g, " ")}</span>` +
+      `<span class="payload">${payload}</span>`;
+    tape.insertBefore(row, tape.firstChild);
+    while (tape.children.length > 200) tape.removeChild(tape.lastChild);
+    evN++; tapeCount.textContent = `${evN} event${evN === 1 ? "" : "s"}`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---- the one place events change our view ------------------------------
+  // Normalises both live (JSON over WS) and simulated events to one shape.
+  function applyEvent(ev) {
+    addTape(ev);
+    const uid = ev.user_id || ev["user-id"];
+    switch (ev.type || ev.op) {
+      case "welcome":
+        presence.clear();
+        for (const [u, st] of Object.entries(ev.presence || {})) presence.set(u, st);
+        renderRoster(); break;
+      case "member-joined":
+        presence.set(uid, "online"); renderRoster(uid);
+        addSystem(`${uid} joined`); break;
+      case "member-left":
+        presence.delete(uid); renderRoster();
+        addSystem(`${uid} left`); break;
+      case "presence-changed":
+        if (presence.has(uid)) presence.set(uid, ev.presence);
+        renderRoster(uid); break;
+      case "message-posted":
+        addMessage(uid, ev.body, ev.occurred_at || ev["occurred-at"]); break;
+    }
+  }
+
+  function setConn(kind, text) {
+    conn.className = "conn " + kind;
+    connText.textContent = text;
+  }
+
+  // =======================================================================
+  // LIVE transport
+  // =======================================================================
+  let ws = null, transport = null;
+
+  function connectLive(onFail) {
+    setConn("connecting", "connecting…");
+    let settled = false;
+    try {
+      ws = new WebSocket(`${WS_URL}?channel=${encodeURIComponent(CHANNEL)}&user=observer`);
+    } catch (e) { onFail(); return; }
+
+    const failTimer = setTimeout(() => { if (!settled) { settled = true; try { ws.close(); } catch (e) {} onFail(); } }, 2500);
+
+    ws.onopen = () => { settled = true; clearTimeout(failTimer); setConn("live", "live · fabric"); };
+    ws.onmessage = (m) => { try { applyEvent(JSON.parse(m.data)); } catch (e) {} };
+    ws.onclose = () => {
+      if (!settled) { settled = true; clearTimeout(failTimer); onFail(); return; }
+      setConn("connecting", "reconnecting…");
+      setTimeout(() => connectLive(onFail), 1500);   // fabric restart => reconnect
+    };
+    ws.onerror = () => {};
+
+    transport = {
+      async command(cmd) {
+        const res = await fetch(`${CQ_URL}/api/commands`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify(cmd),
+        });
+        return res.ok;
+      },
+    };
+  }
+
+  // =======================================================================
+  // DEMO transport — an in-browser mini-backend that emits the same events.
+  // Lets the static bundle be fully interactive with no server at all.
+  // =======================================================================
+  function connectDemo(reason) {
+    setConn("demo", "demo · simulated");
+    banner.hidden = false;
+    banner.innerHTML = reason
+      ? `No live fabric reachable — running a <b>self-contained simulation</b>. Everything below is real client code driving a mock event stream. Start the stack with <code>docker compose up</code> for the live version.`
+      : `Running in <b>demo mode</b>: an in-browser simulator emits the exact events the Clojure→RabbitMQ→Erlang pipeline would. Add <code>?ws=</code> to point at a live fabric.`;
+
+    const members = new Map();       // uid -> state
+    let version = 0;
+    const emit = (partial) => applyEvent({ ...partial, "channel-id": CHANNEL, version: ++version, "occurred-at": new Date().toISOString() });
+
+    // Seed a lively room.
+    const seed = ["nova", "kai", "juno", "rex"];
+    const created = { type: "channel-created" };
+    setTimeout(() => emit(created), 150);
+    // welcome-style snapshot after seeds
+    seed.forEach((u, i) => setTimeout(() => { members.set(u, "online"); emit({ type: "member-joined", "user-id": u }); }, 350 + i * 320));
+
+    const LINES = [
+      "anyone seeing the fan-out lag?", "nope, sub-ms here", "event tape is mesmerizing",
+      "presence flipped instantly 👀", "replay caught me up after reconnect",
+      "who owns the lobby stream?", "the aggregate is pure — love it",
+      "posting from three tabs at once", "brb, going away", "back 🙂",
+    ];
+    const rand = (a) => a[Math.floor(Math.random() * a.length)];
+    const states = ["online", "away", "busy", "online", "online"];
+
+    // Autonomous chatter so the room feels alive.
+    const chatter = setInterval(() => {
+      const live = [...members.keys()];
+      if (!live.length) return;
+      const roll = Math.random();
+      const u = rand(live);
+      if (roll < 0.55) emit({ type: "message-posted", "user-id": u, body: rand(LINES) });
+      else if (roll < 0.85) { const s = rand(states); members.set(u, s); emit({ type: "presence-changed", "user-id": u, presence: s }); }
+      else if (live.length > 2) { members.delete(u); emit({ type: "member-left", "user-id": u }); }
+      // occasionally someone new joins
+      if (Math.random() < 0.15) { const n = rand(["mika","zed","pip","ash","lux"]); if (!members.has(n)) { members.set(n, "online"); emit({ type: "member-joined", "user-id": n }); } }
+    }, 2600);
+    window.addEventListener("beforeunload", () => clearInterval(chatter));
+
+    transport = {
+      async command(cmd) {
+        const u = cmd["user-id"];
+        switch (cmd.type) {
+          case "join-channel": if (!members.has(u)) { members.set(u, "online"); emit({ type: "member-joined", "user-id": u }); } break;
+          case "leave-channel": if (members.has(u)) { members.delete(u); emit({ type: "member-left", "user-id": u }); } break;
+          case "post-message": if (members.has(u)) emit({ type: "message-posted", "user-id": u, body: cmd.body }); break;
+          case "set-presence": if (members.has(u) && members.get(u) !== cmd.presence) { members.set(u, cmd.presence); emit({ type: "presence-changed", "user-id": u, presence: cmd.presence }); } break;
+        }
+        return true;
+      },
+    };
+  }
+
+  // =======================================================================
+  // Wire up controls
+  // =======================================================================
+  async function send(cmd) {
+    cmd["channel-id"] = channelInput.value.trim() || CHANNEL;
+    if (!transport) return;
+    try {
+      const ok = await transport.command(cmd);
+      if (!ok) flash(el("conn"), "command rejected");
+    } catch (e) { /* demo/live both swallow */ }
+  }
+  function flash(node, txt) { const p = connText.textContent; connText.textContent = txt; setTimeout(() => connText.textContent = p, 1200); }
+
+  el("join-btn").onclick = () => send({ type: "join-channel", "user-id": userInput.value.trim() });
+  el("leave-btn").onclick = () => send({ type: "leave-channel", "user-id": userInput.value.trim() });
+  el("msg-send").onclick = sendMessage;
+  msgInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+  function sendMessage() {
+    const body = msgInput.value.trim(); if (!body) return;
+    send({ type: "post-message", "user-id": userInput.value.trim(), body });
+    msgInput.value = "";
+  }
+  document.querySelectorAll(".presence-btns button").forEach((b) => {
+    b.onclick = () => send({ type: "set-presence", "user-id": userInput.value.trim(), presence: b.dataset.p });
+  });
+  channelInput.addEventListener("change", () => {
+    chanName.textContent = channelInput.value.trim() || CHANNEL;
+  });
+
+  // =======================================================================
+  // Boot: try live, fall back to demo.
+  // =======================================================================
+  if (FORCE_DEMO) {
+    connectDemo(false);
+  } else {
+    connectLive(() => connectDemo(true));
+  }
+})();
+</script>
+</body>
+</html>

@@ -70,6 +70,23 @@ Most-recent-first messages (default 50, max 200).
 The full ordered event stream for a channel (audit / debugging), always from
 the durable log.
 
+### `GET /api/channels/{channel-id}/events?since=N`
+
+Replay endpoint: the ordered events for a channel with `version` strictly
+greater than `since` (omit or `0` for the whole stream). The Erlang fabric
+calls this to rehydrate a presence tracker from the durable log after a crash
+or reconnect, closing any fan-out gap.
+
+```json
+{ "channel-id": "lobby", "since": 3, "count": 2,
+  "events": [
+    { "type": "presence-changed", "channel-id": "lobby", "user-id": "bob",
+      "presence": "away", "version": 4, "occurred-at": "2026-07-06T..." },
+    { "type": "message-posted", "channel-id": "lobby", "user-id": "alice",
+      "body": "hey", "version": 5, "occurred-at": "2026-07-06T..." }
+  ] }
+```
+
 ## WebSocket — fabric
 
 Connect:

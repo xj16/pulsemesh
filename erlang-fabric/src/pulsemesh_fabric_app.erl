@@ -22,7 +22,12 @@ start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
         {'_', [
             {"/ws", pulsemesh_ws_handler, []},
-            {"/healthz", pulsemesh_health_handler, []}
+            {"/healthz", pulsemesh_health_handler, []},
+            %% Self-contained live dashboard (presence roster, message pane,
+            %% raw event tape). Served straight from priv/static so the fabric
+            %% is browsable with zero extra tooling.
+            {"/", cowboy_static, {priv_file, pulsemesh_fabric, "static/index.html"}},
+            {"/assets/[...]", cowboy_static, {priv_dir, pulsemesh_fabric, "static"}}
         ]}
     ]),
     Port = application:get_env(pulsemesh_fabric, http_port, 8090),
