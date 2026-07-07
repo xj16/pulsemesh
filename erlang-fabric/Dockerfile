@@ -8,6 +8,7 @@ RUN rebar3 get-deps || true
 
 COPY src ./src
 COPY config ./config
+COPY priv ./priv
 RUN rebar3 as prod release
 
 # --- Runtime stage: minimal Debian with the self-contained release ---------
